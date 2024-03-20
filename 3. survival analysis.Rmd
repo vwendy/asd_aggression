@@ -112,10 +112,15 @@ all_data_agg_selected$acc_z_demean <- all_data_agg_selected$acc_z - all_data_agg
 
 coxmodel2b <- coxph(Surv(start,stop,status_time)~
                       eda_demean+
-                      bvp_demean + 
-                      acc_x_demean + 
+                      bvp_demean +
+                      acc_x_demean +
                       acc_y_demean +
                       acc_z_demean ,
+                      # eda + 
+                      # bvp + 
+                      # acc_x + 
+                      # acc_y + 
+                      # acc_z,
                       method="efron",
                       data=all_data_agg_selected,
                     cluster = id)
@@ -123,8 +128,8 @@ summary(coxmodel2b)
 
 ```
 
-
-
+# prelim results
+BVP extends the time of having an aggressive behavior episode, but it's marginal.
 
 
 
