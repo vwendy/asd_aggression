@@ -1,0 +1,458 @@
+---
+title: "exploratory analysis of auto-regression of biosensors"
+output: html_document
+date: "2023-11-10"
+---
+
+
+# Overview
+dysregulation in physio system is a predictor of aggressive behavior (or sib, ed)
+dysregulation is measured by dynamics in EDA, hand movements, bvp
+
+To examine: effect of AR(1) of EDA, accelerometer, BVP on aggressive behavior
+Expect: Higher AR indicates emotion dysregulation, and elicits higher aggressive behavior
+
+Prelim result:
+Precision-recall is low for prediction of aggressive behavior based on biosensor AR, including xgboosting, multilevel modeling (generalized)
+
+# accelerometr reference
+https://www.google.com/search?sca_esv=589973973&rlz=1C1ONGR_enUS1027US1027&sxsrf=AM9HkKkRsOOsMIKoQZlYlspnVnxPyMNxhQ:1702343399510&q=accelerometer+xyz&tbm=isch&source=lnms&sa=X&ved=2ahUKEwj32POs24iDAxUqFVkFHc2EBkEQ0pQJegQICxAB&biw=1360&bih=643&dpr=1
+
+
+````{r}
+
+library(ggplot2)
+library(dplyr)
+library(lmerTest)
+library(lme4)
+library(lubridate)
+library(psych)
+library(pompom)
+
+library(zoo)
+library(xgboost)
+library(reshape2)
+
+library(pROC)
+library(PRROC)
+
+library(lme4)
+library(lmerTest)
+
+library(caret)
+set.seed(1234)
+```
+ 
+
+
+```{r}
+path <- getwd()
+setwd(path)
+# all_data <- read.csv("all_data.csv", nrows = 200)
+all_data <- read.csv("all_data.csv")
+
+all_data$episode <- as.numeric(substring(all_data$file,9,10))
+
+```
+
+# check distribution of data
+```{r}
+ggplot(data = all_data,aes(x = eda))+
+  geom_histogram()
+
+all_data$eda_zero <- ifelse(abs(all_data$eda) <0.01, 1,0)
+table(all_data$eda_zero) 
+
+all_data$bvp_zero <- ifelse(abs(all_data$bvp)<0.01, 1,0)
+table(all_data$bvp_zero) 
+
+table(all_data$agg) # 0.5% is 1
+table(all_data$ed) # 4.5% is 1
+table(all_data$sib) # 1.8% is 1
+
+```
+
+# compute mean level of 3 behaviors (agg, sib, ed) as well as auto-regression coefficient of biosensors (EDA, BVP, ACC)
+
+
+
+```{r}
+
+id_list <- unique(all_data$id)
+time_window <- 180 # seconds
+predict_window <- 60 # seconds
+sampling_rate <- 4
+sliding_unit <- 15 * sampling_rate # data points, 60 seconds
+
+window_data_collect <- NULL
+
+for (id in id_list){
+  id_data <- all_data[all_data$id == id,]
+  session_list <- unique(id_data$session)
+  for (session in session_list){
+    id_session_data <- id_data[id_data$session == session,]
+    episode_list <- unique(id_session_data$episode)
+  
+    for (episode in episode_list){
+      id_episode_data <- id_session_data[id_session_data$episode == episode,]
+      id_episode_data$timestamp2 <-as.POSIXct(id_episode_data$timestamp/1000, 
+                                   origin="1970-01-01",
+                                   tz = "UTC")
+      id_episode_data$timestamp3 <-as.POSIXct(id_episode_data$timestamp2,
+                                   format = "%Y-%m-%d %H:%M:%OS")
+        
+      id_episode_data <- id_episode_data[order(id_episode_data$timestamp3),]
+      # id_episode_data$eda_diff <- id_episode_data$eda - lag(id_episode_data$eda,1)
+      
+      # compute distance from step to step
+      id_episode_data$acc_distance <- sqrt(
+        (id_episode_data$acc_x - lag(id_episode_data$acc_x,1))^2 + 
+          (id_episode_data$acc_y - lag(id_episode_data$acc_y,1))^2 + 
+          (id_episode_data$acc_z - lag(id_episode_data$acc_z,1))^2)
+      
+  
+      
+      if (time_window*sampling_rate+1  < 
+          nrow(id_episode_data) -
+          predict_window*sampling_rate  - 
+          sliding_unit){
+        for (row in seq(time_window*sampling_rate+1 ,
+                        nrow(id_episode_data) - 
+                        predict_window*sampling_rate , 
+                        sliding_unit)
+             ){
+            
+          # select corresponding rows for the 3 minutes
+          usem_data <- id_episode_data[(row
+                                  -time_window*sampling_rate)
+                                 :row, ]
+          # select column
+          usem_data <- usem_data[c("eda","bvp","acc_distance")]
+          # remove na
+          # usem_data <- usem_data[complete.cases(usem_data),]
+          
+          mean_eda <- mean(usem_data$eda, na.rm = T)
+          mean_acc_distance <- mean(usem_data$acc_distance, na.rm = T)
+          mean_bvp <- mean(usem_data$bvp, na.rm = T)
+          
+          eda_ar <- coefficients(lm(eda~lag(eda,1),data = usem_data))[2]
+          acc_ar <- coefficients(lm(acc_distance~lag(acc_distance,1),data = usem_data))[2]
+          bvp_ar <- coefficients(lm(bvp~lag(bvp,1),data = usem_data))[2]
+          
+     
+            predict_agg<- mean(id_episode_data$agg
+                               [row: (row +predict_window*sampling_rate)], 
+                               na.rm = T)
+            
+            predict_sib<- mean(id_episode_data$sib
+                               [row: (row +predict_window*sampling_rate)], 
+                               na.rm = T)
+            predict_ed<- mean(id_episode_data$ed
+                              [row: (row +predict_window*sampling_rate)], 
+                              na.rm = T)
+           
+           
+          window_data_collect <- rbind(window_data_collect, 
+                                       c(id, session, episode,row,
+                                         predict_agg,
+                                         predict_sib,
+                                         predict_ed, 
+                                         mean_eda, 
+                                         mean_acc_distance,
+                                         mean_bvp,
+                                         eda_ar,
+                                         acc_ar,
+                                         bvp_ar
+                                         ))
+        }# end of window sliding loop
+        
+        
+      }else{
+      next
+      }# end of window size exceeding rows condition
+        
+      }# end of  episode loop
+    } # end of session loop
+} # end of id loop
+
+
+window_data_collect <- data.frame(window_data_collect)
+names(window_data_collect) <-c ("id", "session", "episode","row",
+                               
+                               "predict_agg",
+                               "predict_sib",
+                               "predict_ed",
+                        
+                               "mean_eda", 
+                               "mean_acc_distance",
+                               "mean_bvp",
+                                "eda_ar",
+                                 "acc_ar",
+                                 "bvp_ar")
+
+write.csv(window_data_collect,"exploratory_ar_df.csv" )
+
+
+```
+
+
+
+```{r}
+window_data_collect <-read.csv("exploratory_ar_df.csv" )
+
+
+cor.plot(window_data_collect[,6:ncol(window_data_collect)])
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+window_data_collect$predict_agg_bin <- ifelse(window_data_collect$predict_agg>0 , 1,0)
+# 
+table(window_data_collect$predict_agg_bin)
+# 808 aggressive behavior out of 41k 1-minute window
+```
+
+```{r}
+# fewer onset of aggressive behavior
+
+window_data_collect$agg_onset <- ifelse(window_data_collect$predict_agg>0 &  
+                                          lag(window_data_collect$predict_agg,1)==0, 1,0)
+# 
+table(window_data_collect$agg_onset)
+# 128 aggressive beahvior onset out of 41k 1-minute window
+```
+```{r}
+id_agg <- data.frame(window_data_collect %>% 
+                       group_by(id) %>% 
+                       summarise(
+                         agg_count = sum(predict_agg_bin, na.rm = T)))
+table(id_agg$agg_count)
+# distribution of ID's aggressive episode counts, e.g., 35 participants had 0 aggressive behavior (defined as in the 1-minute window, so not strictly speaking an episode)
+
+```
+
+
+# apply ML on this 
+
+## split training and testing set
+This was done in the fashion of time-series prediction, select the first 80% rows of each id as training set, and the rest 20% as testing set.
+
+Note here "window_data_collect" data frame is the "aggregated" data frame after computing each moving window's data summary (15 seconds). That's why we needed to multiply the index by sliding_unit (15 seconds * 4 sampling/second) plus the initial biosensor window (3 minute * 60 seconds * 4sampling/second = 720) 
+```{r}
+
+id_80percent <- data.frame(window_data_collect %>%
+                             group_by(id, session, episode) %>% 
+                             summarise(eighty_percent_rows = round(n() * .8,0)))
+
+window_data_collect_new <- merge(window_data_collect,
+                                 id_80percent,by=c("id" , "session", "episode"))
+
+training_set <- window_data_collect[window_data_collect_new$row <= 
+                                      (window_data_collect_new$eighty_percent_rows -1)* sliding_unit + time_window * sampling_rate,]
+
+nrow(training_set)/nrow(window_data_collect)
+
+testing_set <- window_data_collect_new[window_data_collect_new$row >
+                                      (window_data_collect_new$eighty_percent_rows -1)* sliding_unit + time_window * sampling_rate,]
+
+```
+
+## select features
+```{r}
+
+selected_features <- c("mean_eda",
+                       "mean_acc_distance",
+                       "mean_bvp",
+                       
+                       "eda_ar",
+                       "acc_ar",
+                       "bvp_ar")
+```
+
+## xgboosting as prediction method
+```{r}
+xgb_model <- xgboost(data = as.matrix(training_set[c(selected_features)]),
+                       label =training_set$predict_agg_bin,
+                       max.depth = 5,
+                       eta = 1,
+                       nthread = 5,
+                       nrounds = 100,
+                       objective = "binary:logistic")
+  
+
+importance_matrix = xgb.importance(selected_features, model = xgb_model)
+importance_matrix
+
+xgb.plot.importance(importance_matrix)
+```
+
+
+
+```{r}
+# validate using testing set
+testing_set$prediction <- predict(xgb_model, newdata =as.matrix( testing_set[c(selected_features)]))
+
+```
+
+
+### check accuracy
+```{r}
+
+
+roc_model <- roc(
+ testing_set$predict_agg_bin,
+ testing_set$prediction)
+
+plot(roc_model, print.auc=TRUE)
+```
+### precision-recall AUC
+
+Precision-recall AUC is low. 
+```{r}
+
+pr<-pr.curve(scores.class0=testing_set$predict_agg_bin,
+             scores.class1=testing_set$prediction, 
+             curve = T)
+pr
+plot(pr)
+```
+
+
+
+## Generalized multilevel modeling as a prediction method
+```{r}
+
+m1 <- glmer(predict_agg_bin~
+              mean_eda + 
+              eda_ar+
+              mean_acc_distance +
+              acc_ar+
+              mean_bvp + 
+              bvp_ar + 
+             (1 |id), 
+          data =training_set, 
+          family = "binomial")
+summary(m1)
+
+```
+
+```{r}
+# test roc
+testing_set$glmer_prediction <- predict(m1, testing_set, type = "response")
+
+describe(testing_set$glmer_prediction )
+```
+
+```{r}
+glmer_roc_model <- roc(
+ testing_set$predict_agg_bin,
+ testing_set$glmer_prediction)
+
+plot(glmer_roc_model, print.auc=TRUE)
+
+
+# precision recall auc
+testing_set <- testing_set[!is.na(testing_set$glmer_prediction),]
+
+pr<-pr.curve(scores.class0=testing_set$predict_agg_bin,
+             scores.class1=testing_set$glmer_prediction, 
+             curve = T)
+pr
+plot(pr)
+```
+
+
+# Check if eda is caused by agg
+use lag-4,5,6 aggressive behavior (because of the 3 minute biosensor window and 1 minute aggressive behavior window) to predict current eda, the corresponding EDA and lag-1 aggressive behavior should be the aggressive behavior of 4,5,6 minute ago
+```{r}
+window_data_collect$lag_agg <-
+  lag(window_data_collect$predict_agg,4)+
+  lag(window_data_collect$predict_agg,5)+
+  lag(window_data_collect$predict_agg,6)
+
+m2 <- lmer(mean_eda~
+             lag_agg +
+             (1 |id), 
+          data =window_data_collect )
+summary(m2)
+```
+
+### test on outcome as onset of aggression
+```{r}
+
+
+m3 <- glmer(agg_onset~
+              mean_eda + 
+              eda_ar+
+              mean_acc_distance + 
+              acc_ar+
+              mean_bvp + 
+              bvp_ar + 
+             (1 |id), 
+          data =training_set, 
+          family = "binomial")
+summary(m3)
+```
+
+```{r}
+# test roc
+testing_set$agg_onset_glmer_prediction <- predict(m3, testing_set, type = "response")
+
+describe(testing_set$agg_onset_glmer_prediction )
+table(testing_set$agg_onset )
+```
+
+```{r}
+glmer_roc_model <- roc(
+ testing_set$agg_onset,
+ testing_set$agg_onset_glmer_prediction)
+
+plot(glmer_roc_model, print.auc=TRUE)
+
+
+# precision recall auc
+testing_set <- testing_set[!is.na(testing_set$agg_onset_glmer_prediction),]
+
+pr<-pr.curve(scores.class0=testing_set$agg_onset,
+             scores.class1=testing_set$agg_onset_glmer_prediction, 
+             curve = T)
+pr
+plot(pr)
+```
+
+
+
+```{r}
+
+ggplot(data = window_data_collect, aes(x = mean_acc_distance, y = agg_onset, group = id))+
+  geom_point()+
+  geom_smooth(method = "loess", se = F)+
+  facet_wrap(~id)
+```
+
+
+
+
+
+
+

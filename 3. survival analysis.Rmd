@@ -1,0 +1,133 @@
+---
+title: "exploratory analysis of auto-regression of biosensors"
+output: html_document
+date: "2023-11-10"
+---
+
+
+# Overview
+To examine: if biosensor predicts end of aggressive behavior
+
+
+````{r}
+
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(psych)
+library(reshape2)
+
+library(survival)
+set.seed(1234)
+```
+ 
+
+
+```{r}
+path <- getwd()
+setwd(path)
+# all_data <- read.csv("all_data.csv", nrows = 200)
+all_data <- read.csv("all_data.csv")
+
+all_data$episode <- as.numeric(substring(all_data$file,9,10))
+
+```
+
+
+# select aggressive behavior = ON episodes
+
+
+
+```{r}
+all_data_agg_selected <- all_data[all_data$ed==1,]
+
+```
+
+```{r}
+
+all_data_agg_selected$timestamp2 <-as.POSIXct(all_data_agg_selected$timestamp/1000, 
+                             origin="1970-01-01",
+                             tz = "UTC")
+all_data_agg_selected$timestamp3 <-as.POSIXct(all_data_agg_selected$timestamp2,
+                             format = "%Y-%m-%d %H:%M:%OS")
+
+
+all_data_agg_selected <- all_data_agg_selected[order(all_data_agg_selected$id,
+                                                     all_data_agg_selected$timestamp2),]
+```
+
+## create a time index, starting from 1, for these episodes
+```{r}
+all_data_agg_selected$start <- rep(0,nrow(all_data_agg_selected))
+all_data_agg_selected$stop <- rep(1,nrow(all_data_agg_selected))
+all_data_agg_selected$status_time <- rep(0,nrow(all_data_agg_selected))
+
+for (row in 2:nrow(all_data_agg_selected)){
+  if(all_data_agg_selected$id[row]==all_data_agg_selected$id[row-1] &
+     all_data_agg_selected$session[row]==all_data_agg_selected$session[row-1] &
+     all_data_agg_selected$episode[row]==all_data_agg_selected$episode[row-1]){
+    all_data_agg_selected$start[row]<- all_data_agg_selected$start[row-1]+1
+    all_data_agg_selected$stop[row]<- all_data_agg_selected$stop[row-1]+1
+    
+  }else{
+    
+    all_data_agg_selected$status_time[row-1]<- 1
+  }
+}
+
+
+```
+
+
+```{r}
+all_data_agg_selected_scale <- data.frame(all_data %>%
+                                            group_by(id, session, episode) %>%
+                                            summarize(
+                                              eda_m = mean(eda, na.rm = T),
+                                              bvp_m = mean(bvp, na.rm = T),
+                                              acc_x_m = mean(acc_x, na.rm = T),
+                                              acc_y_m = mean(acc_y, na.rm = T),
+                                              acc_z_m = mean(acc_z, na.rm = T)
+                                            ))
+
+all_data_agg_selected <- merge(all_data_agg_selected, all_data_agg_selected_scale, by = 
+                                 c("id","session","episode"))
+
+all_data_agg_selected$eda_demean <- all_data_agg_selected$eda - all_data_agg_selected$eda_m
+
+all_data_agg_selected$bvp_demean <- all_data_agg_selected$bvp - all_data_agg_selected$bvp_m
+
+all_data_agg_selected$acc_x_demean <- all_data_agg_selected$acc_x - all_data_agg_selected$eda_m
+
+all_data_agg_selected$acc_y_demean <- all_data_agg_selected$acc_y - all_data_agg_selected$acc_y_m
+
+all_data_agg_selected$acc_z_demean <- all_data_agg_selected$acc_z - all_data_agg_selected$acc_z_m
+
+```
+
+# survival analysis
+
+```{r}
+
+
+coxmodel2b <- coxph(Surv(start,stop,status_time)~
+                      eda_demean+
+                      bvp_demean + 
+                      acc_x_demean + 
+                      acc_y_demean +
+                      acc_z_demean ,
+                      method="efron",
+                      data=all_data_agg_selected,
+                    cluster = id)
+summary(coxmodel2b)
+
+```
+
+
+
+
+
+
+
+
+

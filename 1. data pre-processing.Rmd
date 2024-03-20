@@ -1,0 +1,120 @@
+---
+title: "data pre-processing"
+output: html_document
+date: "2023-11-10"
+---
+
+Goal: combine all CSV files into one long format data frame 
+
+````{r}
+
+library(ggplot2)
+library(dplyr)
+library(lmerTest)
+library(lme4)
+library(lubridate)
+library(psych)
+library(reshape2)
+```
+
+
+
+```{r}
+
+path <- "C:/Users/vwend/Downloads/ASD aggression/" 
+folders <- list.files(path)
+
+data_collection <- NULL
+
+pdf("ASD aggression data viz", width = 8, height = 12)
+
+
+for (folder in folders){
+  
+  folders_lv2 <- list.files(paste(path,folder,sep=""))
+  
+  for (folder_lv2 in folders_lv2){
+      
+    files <- list.files(paste(
+      paste(path,
+            folder,
+            sep=""), 
+      folder_lv2, 
+      sep = "/"), 
+      pattern = "_combined_matched.csv")
+  
+  for (file in files){
+    
+    data <- read.csv(paste(
+      paste(
+        paste(path,
+              folder,
+              sep=""), 
+        folder_lv2, 
+        sep = "/"), 
+      file, sep ="/"))
+        
+      names(data)<- tolower(names(data))
+      data$timestamp2 <-as.POSIXct(data$timestamp/1000, 
+                                   origin="1970-01-01",
+                                   tz = "UTC")
+      data$timestamp3 <-as.POSIXct(data$timestamp2,
+                                   format = "%Y-%m-%d %H:%M:%OS")
+      data$time_gap <- difftime(lead(data$timestamp3, 1), 
+                                  data$timestamp3, 
+                                units ="secs")
+      data$eda_scale <- data$eda/max(data$eda, na.rm = T)*3
+      data$file <- rep(file, nrow(data))
+      
+      data_collection <-rbind(data_collection, data)
+      
+
+
+      data_long <- melt(data[c("acc_x"  ,
+                               "acc_y" ,
+                               "acc_z"  ,
+                               "bvp"  ,
+                               "eda"     ,
+                               "agg"  ,
+                               "ed"     ,
+                               "sib"   ,
+                               "timestamp3"  )],
+                        id.vars = "timestamp3")
+
+      
+      print(
+        ggplot(data = data_long)+
+          geom_line(aes(x = timestamp3, y =  value, group = variable, color = variable)) +
+          theme_classic() +
+          facet_wrap(~variable, ncol = 1, scale = "free") +
+          ggtitle(file)
+      )
+      
+     
+  }
+  }
+}
+
+dev.off()
+# 
+# # question how to pre-process and analyze bvp?
+# ggplot(data = data[1:500,])+
+#   geom_line(aes(x = timestamp3, y =  bvp/100), color = "blue")+
+#   theme_classic()
+```
+
+
+```{r}
+data_collection$id <- substring(data_collection$file,1,4)
+data_collection$session <- substring(data_collection$file,6,7)
+```
+```{r}
+write.csv(data_collection, "all_data.csv")
+```
+
+# descriptives, distribution of the eda, acc, and duration and occurrence of agg episodes
+
+```{r}
+describe(data)
+
+```
