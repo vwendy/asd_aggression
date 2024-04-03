@@ -115,6 +115,38 @@ write.csv(data_collection, "all_data.csv")
 # descriptives, distribution of the eda, acc, and duration and occurrence of agg episodes
 
 ```{r}
-describe(data)
+describe(data_collection)
+```
 
+```{r}
+data_collection <- read.csv("all_data.csv")
+```
+
+```{r}
+# each data point is a raw data sampled
+summarize_id <- data.frame(
+  data_collection %>% 
+    group_by(id) %>% 
+    summarize(
+      agg_behavior = sum(agg, na.rm =T)/4, # how many seconds of aggressive behavior
+      total_duration = n()/4/3600 #hence this is the hours of data
+  )
+)
+
+summarize_id <-summarize_id[order(-summarize_id$agg_behavior),]
+summarize_id
+```
+
+```{r}
+describe(summarize_id)
+```
+
+```{r}
+# how many participants in the study
+nrow(summarize_id)
+
+# how many id had zero aggressive behavior
+zero_agg_id <- summarize_id[summarize_id$agg_behavior==0,]$id
+length(zero_agg_id)
+# 34 ID had zero aggressive behavior
 ```

@@ -39,7 +39,7 @@ all_data$episode <- as.numeric(substring(all_data$file,9,10))
 
 
 ```{r}
-all_data_agg_selected <- all_data[all_data$ed==1,]
+all_data_agg_selected <- all_data[all_data$agg==1,]
 
 ```
 
@@ -77,6 +77,41 @@ for (row in 2:nrow(all_data_agg_selected)){
 
 
 ```
+
+<!-- ```{r} -->
+<!-- new_index_df <- data.frame(unique(all_data_agg_selected[c("id","session","episode")])) -->
+<!-- new_index_df$id_session_episode <- paste(new_index_df$id, -->
+<!--                                          new_index_df$session, -->
+<!--                                          new_index_df$episode , -->
+<!--                                          sep ="_") -->
+<!-- new_index_df$index <- 1:nrow(new_index_df) -->
+
+<!-- all_data_agg_selected$id_session_episode <- paste(all_data_agg_selected$id, -->
+<!--                                          all_data_agg_selected$session, -->
+<!--                                          all_data_agg_selected$episode , -->
+<!--                                          sep ="_") -->
+<!-- all_data_agg_selected <- merge(all_data_agg_selected,new_index_df[c("id_session_episode","index")],  -->
+<!--                                by ="id_session_episode") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- all_data_agg_selected$session_episode <- paste(all_data_agg_selected$session, -->
+<!--                                                all_data_agg_selected$episode, -->
+<!--                                                sep="_") -->
+<!-- ggplot(data = all_data_agg_selected)+ -->
+<!--   # geom_rect(aes(xmin =start, xmax = stop, ymin=index,ymax = index+0.9, fill = factor(status_time) ))+  -->
+<!--   geom_line(aes(x=start,y=acc_x_demean, group =session_episode), color = "red" -->
+<!--             , alpha = .5 -->
+<!--             )+ -->
+<!--   geom_line(aes(x=start,y=acc_y_demean, group =session_episode), color = "blue" -->
+<!--             , alpha = .5 -->
+<!--             )+ -->
+<!--   geom_line(aes(x=start,y=acc_z_demean, group =session_episode), color = "green" -->
+<!--             , alpha = .5 -->
+<!--             )+ -->
+<!--   theme_classic()+ -->
+<!--   facet_wrap(~id, scale = "free") -->
+<!-- ``` -->
 
 
 ```{r}
@@ -116,23 +151,66 @@ coxmodel2b <- coxph(Surv(start,stop,status_time)~
                       acc_x_demean +
                       acc_y_demean +
                       acc_z_demean ,
-                      # eda + 
-                      # bvp + 
-                      # acc_x + 
-                      # acc_y + 
-                      # acc_z,
+                      #  eda+
+                      # bvp +
+                      # acc_x +
+                      # acc_y +
+                      # acc_z ,
                       method="efron",
-                      data=all_data_agg_selected,
+                      data=all_data_agg_selected
+                    # [all_data_agg_selected$start<500,]
+                    ,
                     cluster = id)
 summary(coxmodel2b)
 
+
 ```
+
+
+
+
 
 # prelim results
 BVP extends the time of having an aggressive behavior episode, but it's marginal.
 
 
 
+```{r}
 
+baselinesurvival <- survfit(coxmodel2b)
+
+plot(baselinesurvival,
+     xlab="Time", 
+     ylab="Survival Probability", 
+     main="PH Model Survival Curve")
+```
+
+```{r}
+describe(all_data_agg_selected)
+
+```
+```{r}
+baselinesurvival <- survfit(coxmodel2b)
+plot(baselinesurvival,
+     xlab="Time", 
+     ylab="Survival Probability", 
+     main="PH Model Survival Curve")
+#add lines for each group
+
+lines(survfit(coxmodel2b,
+              newdata=data.frame(acc_x_demean=100,
+                                 acc_y_demean=0,
+                                 acc_z_demean=0,
+                                 eda_demean=0,
+                                 bvp_demean=0)),
+              lty=2,col='red')
+lines(survfit(coxmodel2b,
+              newdata=data.frame(acc_x_demean=-100,
+                                 acc_y_demean=0,
+                                 acc_z_demean=0,
+                                 eda_demean=0,
+                                 bvp_demean=0)),
+              lty=2,col='green')
+```
 
 
