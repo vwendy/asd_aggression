@@ -230,7 +230,7 @@ names(window_data_collect) <-c ("id", "session", "episode","row",
                                          "acc_z_slp",
                                          "bvp_slp")
 
-write.csv(window_data_collect,"exploratory_ar_df.csv" )
+write.csv(window_data_collect,"features_df.csv" )
 
 
 ```

@@ -92,9 +92,13 @@ all_data_agg_selected$time_gap <- as.numeric(all_data_agg_selected$time_gap)
 
 describe(all_data_agg_selected$time_gap)
 
-all_data_agg_selected$new_agg_episode <- ifelse(all_data_agg_selected$time_gap>0.25 |
-                                                  (all_data_agg_selected$id !=
-                                                     lag(all_data_agg_selected$id,1))
+```
+
+```{r}
+
+all_data_agg_selected$new_agg_episode <- ifelse(all_data_agg_selected$time_gap!=0.25 
+                                                  # (all_data_agg_selected$id !=
+                                                  #    lag(all_data_agg_selected$id,1))
                                                          ,1,0)
  sum(all_data_agg_selected$new_agg_episode, na.rm = T)
  

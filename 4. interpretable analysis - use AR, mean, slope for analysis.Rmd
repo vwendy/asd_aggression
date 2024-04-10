@@ -45,7 +45,7 @@ setwd(path)
 ```
 
 ```{r}
-window_data_collect <-read.csv("exploratory_ar_df.csv" )
+window_data_collect <-read.csv("features_df.csv" )
 ```
 
 ```{r}
@@ -69,7 +69,10 @@ cor.plot(window_data_collect[,6:ncol(window_data_collect)])
 ### test on outcome as onset of aggression
 ```{r}
 
-window_data_collect$predict_agg_bin <- ifelse(window_data_collect$predict_agg >0,1,0)
+window_data_collect$predict_agg_bin <- ifelse(window_data_collect$predict_agg >0 |
+                                                window_data_collect$predict_sib >0|
+                                                window_data_collect$predict_ed >0
+,1,0)
 
 m1 <- glmer(predict_agg_bin~
               mean_eda + 
@@ -81,15 +84,15 @@ m1 <- glmer(predict_agg_bin~
               mean_bvp + 
               bvp_ar + 
               bvp_slp + 
-              mean_acc_x + 
-              acc_x_ar + 
-              acc_x_slp + 
-              mean_acc_y + 
-              acc_y_ar + 
-              acc_y_slp + 
-              mean_acc_z + 
-              acc_z_ar + 
-              acc_z_slp + 
+              # mean_acc_x + 
+              # acc_x_ar + 
+              # acc_x_slp + 
+              # mean_acc_y + 
+              # acc_y_ar + 
+              # acc_y_slp + 
+              # mean_acc_z + 
+              # acc_z_ar + 
+              # acc_z_slp + 
              (1 |id), 
           data =window_data_collect, 
           family = "binomial")
@@ -98,11 +101,11 @@ summary(m1)
 
 ```{r}
 
-window_data_collect$agg_onset <- ifelse(window_data_collect$predict_agg>0 &
-                                          lag(window_data_collect$predict_agg,1)==0,1,0)
-
-window_data_collect$in_agg_session <- ifelse(window_data_collect$predict_agg>0 &
-                                          lag(window_data_collect$predict_agg,1)>0,1,0)
+window_data_collect$agg_onset <- ifelse(window_data_collect$predict_agg_bin>0 &
+                                          lag(window_data_collect$predict_agg_bin,1)==0,1,0)
+# 
+# window_data_collect$in_agg_session <- ifelse(window_data_collect$predict_agg_bin>0 &
+#                                           lag(window_data_collect$predict_agg_bin,1)>0,1,0)
 
 m2 <- glmer(agg_onset~
               mean_eda + 
@@ -114,25 +117,26 @@ m2 <- glmer(agg_onset~
               mean_bvp + 
               bvp_ar + 
               bvp_slp + 
-              mean_acc_x + 
-              acc_x_ar + 
-              acc_x_slp + 
-              mean_acc_y + 
-              acc_y_ar + 
-              acc_y_slp + 
-              mean_acc_z + 
-              acc_z_ar + 
-              acc_z_slp + 
+              # mean_acc_x + 
+              # acc_x_ar + 
+              # acc_x_slp + 
+              # mean_acc_y + 
+              # acc_y_ar + 
+              # acc_y_slp + 
+              # mean_acc_z + 
+              # acc_z_ar + 
+              # acc_z_slp + 
              (1 |id), 
-          data =window_data_collect[window_data_collect$in_agg_session==0,], 
+          data =window_data_collect, 
           family = "binomial")
 summary(m2)
 ```
 
 ```{r}
 
-window_data_collect$agg_offset <- ifelse(window_data_collect$predict_agg==0 &
-                                          lag(window_data_collect$predict_agg,1)>0,1,0)
+window_data_collect$agg_offset <- ifelse(window_data_collect$predict_agg_bin==0 &
+                                          lag(window_data_collect$predict_agg_bin,1)>0,1,0)
+
 m2 <- glmer(agg_offset~
               mean_eda + 
               eda_ar+
@@ -143,17 +147,17 @@ m2 <- glmer(agg_offset~
               mean_bvp + 
               bvp_ar + 
               bvp_slp + 
-              mean_acc_x + 
-              acc_x_ar + 
-              acc_x_slp + 
-              mean_acc_y + 
-              acc_y_ar + 
-              acc_y_slp + 
-              mean_acc_z + 
-              acc_z_ar + 
-              acc_z_slp + 
+              # mean_acc_x + 
+              # acc_x_ar + 
+              # acc_x_slp + 
+              # mean_acc_y + 
+              # acc_y_ar + 
+              # acc_y_slp + 
+              # mean_acc_z + 
+              # acc_z_ar + 
+              # acc_z_slp + 
              (1 |id), 
-          data =window_data_collect[window_data_collect$in_agg_session==1,], 
+          data =window_data_collect, 
           family = "binomial")
 summary(m2)
 ```
