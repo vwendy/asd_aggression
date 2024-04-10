@@ -21,12 +21,12 @@ library(reshape2)
 
 ```{r}
 
-path <- "C:/Users/vwend/Downloads/ASD aggression/" 
+# path <- [yourpath]
 folders <- list.files(path)
 
 data_collection <- NULL
 
-pdf("ASD aggression data viz", width = 8, height = 12)
+pdf("ASD aggression data viz.pdf", width = 8, height = 12)
 
 
 for (folder in folders){
