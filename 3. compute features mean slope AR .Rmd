@@ -48,7 +48,6 @@ set.seed(1234)
 ```{r}
 path <- getwd()
 setwd(path)
-# all_data <- read.csv("all_data.csv", nrows = 200)
 all_data <- read.csv("all_data.csv")
 
 all_data$episode <- as.numeric(substring(all_data$file,9,10))
@@ -127,17 +126,35 @@ for (id in id_list){
                                   -time_window*sampling_rate)
                                  :row, ]
           # select column
-          usem_data <- usem_data[c("eda","bvp","acc_distance")]
+          usem_data <- usem_data[c("eda","bvp","acc_distance","acc_x","acc_y","acc_z")]
+          usem_data$t <-1:nrow(usem_data)
           # remove na
           # usem_data <- usem_data[complete.cases(usem_data),]
           
           mean_eda <- mean(usem_data$eda, na.rm = T)
           mean_acc_distance <- mean(usem_data$acc_distance, na.rm = T)
+          
+          mean_acc_x <- mean(usem_data$acc_x, na.rm = T)
+          mean_acc_y <- mean(usem_data$acc_y, na.rm = T)
+          mean_acc_z <- mean(usem_data$acc_z, na.rm = T)
+          
           mean_bvp <- mean(usem_data$bvp, na.rm = T)
           
           eda_ar <- coefficients(lm(eda~lag(eda,1),data = usem_data))[2]
           acc_ar <- coefficients(lm(acc_distance~lag(acc_distance,1),data = usem_data))[2]
+          acc_x_ar <- coefficients(lm(acc_x~lag(acc_x,1),data = usem_data))[2]
+          acc_y_ar <- coefficients(lm(acc_y~lag(acc_y,1),data = usem_data))[2]
+          acc_z_ar <- coefficients(lm(acc_z~lag(acc_z,1),data = usem_data))[2]
           bvp_ar <- coefficients(lm(bvp~lag(bvp,1),data = usem_data))[2]
+          
+          
+          eda_slp <- coefficients(lm(eda~t,data = usem_data))[2]
+          acc_slp <- coefficients(lm(acc_distance~t,data = usem_data))[2]
+          acc_x_slp <- coefficients(lm(acc_x~t,data = usem_data))[2]
+          acc_y_slp <- coefficients(lm(acc_y~t,data = usem_data))[2]
+          acc_z_slp <- coefficients(lm(acc_z~t,data = usem_data))[2]
+          bvp_slp<- coefficients(lm(bvp~t,data = usem_data))[2]
+          
           
      
             predict_agg<- mean(id_episode_data$agg
@@ -159,10 +176,22 @@ for (id in id_list){
                                          predict_ed, 
                                          mean_eda, 
                                          mean_acc_distance,
+                                         mean_acc_x,
+                                         mean_acc_y,
+                                         mean_acc_z,
                                          mean_bvp,
                                          eda_ar,
                                          acc_ar,
-                                         bvp_ar
+                                         acc_x_ar,
+                                         acc_y_ar,
+                                         acc_z_ar,
+                                         bvp_ar,
+                                          eda_slp,
+                                         acc_slp,
+                                         acc_x_slp,
+                                         acc_y_slp,
+                                         acc_z_slp,
+                                         bvp_slp
                                          ))
         }# end of window sliding loop
         
@@ -180,15 +209,26 @@ window_data_collect <- data.frame(window_data_collect)
 names(window_data_collect) <-c ("id", "session", "episode","row",
                                
                                "predict_agg",
-                               "predict_sib",
-                               "predict_ed",
-                        
-                               "mean_eda", 
-                               "mean_acc_distance",
-                               "mean_bvp",
-                                "eda_ar",
-                                 "acc_ar",
-                                 "bvp_ar")
+                                         "predict_sib",
+                                         "predict_ed", 
+                                         "mean_eda", 
+                                         "mean_acc_distance",
+                                         "mean_acc_x",
+                                         "mean_acc_y",
+                                         "mean_acc_z",
+                                         "mean_bvp",
+                                         "eda_ar",
+                                         "acc_ar",
+                                         "acc_x_ar",
+                                         "acc_y_ar",
+                                         "acc_z_ar",
+                                         "bvp_ar",
+                                          "eda_slp",
+                                         "acc_slp",
+                                         "acc_x_slp",
+                                         "acc_y_slp",
+                                         "acc_z_slp",
+                                         "bvp_slp")
 
 write.csv(window_data_collect,"exploratory_ar_df.csv" )
 

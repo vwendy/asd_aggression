@@ -1,0 +1,115 @@
+---
+title: "descriptives"
+output: html_document
+date: "2024-04-10"
+---
+
+
+````{r}
+
+library(ggplot2)
+library(dplyr)
+library(lmerTest)
+library(lme4)
+library(lubridate)
+library(psych)
+library(reshape2)
+```
+
+```{r}
+data_collection <- read.csv("all_data.csv")
+```
+
+```{r}
+head(data_collection)
+# duration
+nrow(data_collection)/4/3600 # in hours
+```
+
+```{r}
+# each data point is a raw data sampled
+summarize_id <- data.frame(
+  data_collection %>% 
+    group_by(id) %>% 
+    summarize(
+      agg_behavior = sum(agg, na.rm =T)/4, # how many seconds of aggressive behavior
+      total_duration = n()/4/3600 #hence this is the hours of data
+  )
+)
+
+summarize_id <-summarize_id[order(-summarize_id$agg_behavior),]
+summarize_id
+```
+
+```{r}
+describe(summarize_id)
+sum(summarize_id$agg_behavior,na.rm=T)
+```
+
+```{r}
+# how many participants in the study
+nrow(summarize_id)
+
+# how many id had zero aggressive behavior
+zero_agg_id <- summarize_id[summarize_id$agg_behavior==0,]$id
+length(zero_agg_id)
+# 34 ID had zero aggressive behavior
+```
+
+## computing epochs
+
+```{r}
+all_data_agg_selected <- data_collection[data_collection$agg==1,]
+
+```
+
+
+```{r}
+
+all_data_agg_selected$timestamp2 <-as.POSIXct(all_data_agg_selected$timestamp/1000, 
+                             origin="1970-01-01",
+                             tz = "UTC")
+all_data_agg_selected$timestamp3 <-as.POSIXct(all_data_agg_selected$timestamp2,
+                             format = "%Y-%m-%d %H:%M:%OS")
+
+
+all_data_agg_selected <- all_data_agg_selected[order(all_data_agg_selected$id,
+                                                     all_data_agg_selected$timestamp2),]
+```
+
+## compute gap between two records
+```{r}
+all_data_agg_selected <- all_data_agg_selected[order(
+  all_data_agg_selected$id,
+  all_data_agg_selected$session,
+  # all_data_agg_selected$episode,
+  all_data_agg_selected$timestamp2
+),]
+all_data_agg_selected$time_gap <- difftime(all_data_agg_selected$timestamp2, 
+                                           lag(all_data_agg_selected$timestamp2, 1), 
+                                           units = "secs")
+all_data_agg_selected$time_gap <- as.numeric(all_data_agg_selected$time_gap)
+
+describe(all_data_agg_selected$time_gap)
+
+all_data_agg_selected$new_agg_episode <- ifelse(all_data_agg_selected$time_gap>0.25 |
+                                                  (all_data_agg_selected$id !=
+                                                     lag(all_data_agg_selected$id,1))
+                                                         ,1,0)
+ sum(all_data_agg_selected$new_agg_episode, na.rm = T)
+ 
+ 
+agg_episode_by_id <- data.frame(all_data_agg_selected%>%
+                                  group_by(id) %>% 
+                                  summarize(
+                                    total_episodes = sum(new_agg_episode, na.rm = T),
+                                    count_seconds = n()/4
+ ))
+
+describe(agg_episode_by_id)
+# total episodes/epochs of aggressive behavior
+sum(agg_episode_by_id$total_episodes)
+# total number of seconds of aggressive behavior
+sum(agg_episode_by_id$count_seconds)
+```
+```

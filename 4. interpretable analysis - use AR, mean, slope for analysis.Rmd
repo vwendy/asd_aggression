@@ -1,0 +1,159 @@
+---
+title: "exploratory analysis of auto-regression of biosensors"
+output: html_document
+date: "2023-11-10"
+---
+
+
+# Overview
+
+
+````{r}
+
+library(ggplot2)
+library(dplyr)
+library(lmerTest)
+library(lme4)
+library(lubridate)
+library(psych)
+library(pompom)
+
+library(zoo)
+library(xgboost)
+library(reshape2)
+
+library(pROC)
+library(PRROC)
+
+library(lme4)
+library(lmerTest)
+
+library(caret)
+set.seed(1234)
+```
+ 
+
+
+```{r}
+path <- getwd()
+setwd(path)
+# all_data <- read.csv("all_data.csv", nrows = 200)
+# all_data <- read.csv("all_data.csv")
+# 
+# all_data$episode <- as.numeric(substring(all_data$file,9,10))
+
+```
+
+```{r}
+window_data_collect <-read.csv("exploratory_ar_df.csv" )
+```
+
+```{r}
+describe(window_data_collect)
+
+# rescale some predictors
+window_data_collect$mean_acc_distance <- window_data_collect$mean_acc_distance/100
+window_data_collect$mean_acc_x<- window_data_collect$mean_acc_x/100
+window_data_collect$mean_acc_y<- window_data_collect$mean_acc_y/100
+window_data_collect$mean_acc_z<- window_data_collect$mean_acc_z/100
+
+window_data_collect$mean_eda<- window_data_collect$mean_eda/100
+window_data_collect$mean_bvp<- window_data_collect$mean_bvp/100
+
+describe(window_data_collect)
+cor.plot(window_data_collect[,6:ncol(window_data_collect)])
+
+```
+
+
+### test on outcome as onset of aggression
+```{r}
+
+window_data_collect$predict_agg_bin <- ifelse(window_data_collect$predict_agg >0,1,0)
+
+m1 <- glmer(predict_agg_bin~
+              mean_eda + 
+              eda_ar+
+              eda_slp + 
+              mean_acc_distance + 
+              acc_ar+
+              acc_slp +
+              mean_bvp + 
+              bvp_ar + 
+              bvp_slp + 
+              mean_acc_x + 
+              acc_x_ar + 
+              acc_x_slp + 
+              mean_acc_y + 
+              acc_y_ar + 
+              acc_y_slp + 
+              mean_acc_z + 
+              acc_z_ar + 
+              acc_z_slp + 
+             (1 |id), 
+          data =window_data_collect, 
+          family = "binomial")
+summary(m1)
+```
+
+```{r}
+
+window_data_collect$agg_onset <- ifelse(window_data_collect$predict_agg>0 &
+                                          lag(window_data_collect$predict_agg,1)==0,1,0)
+
+window_data_collect$in_agg_session <- ifelse(window_data_collect$predict_agg>0 &
+                                          lag(window_data_collect$predict_agg,1)>0,1,0)
+
+m2 <- glmer(agg_onset~
+              mean_eda + 
+              eda_ar+
+              eda_slp + 
+              mean_acc_distance + 
+              acc_ar+
+              acc_slp +
+              mean_bvp + 
+              bvp_ar + 
+              bvp_slp + 
+              mean_acc_x + 
+              acc_x_ar + 
+              acc_x_slp + 
+              mean_acc_y + 
+              acc_y_ar + 
+              acc_y_slp + 
+              mean_acc_z + 
+              acc_z_ar + 
+              acc_z_slp + 
+             (1 |id), 
+          data =window_data_collect[window_data_collect$in_agg_session==0,], 
+          family = "binomial")
+summary(m2)
+```
+
+```{r}
+
+window_data_collect$agg_offset <- ifelse(window_data_collect$predict_agg==0 &
+                                          lag(window_data_collect$predict_agg,1)>0,1,0)
+m2 <- glmer(agg_offset~
+              mean_eda + 
+              eda_ar+
+              eda_slp + 
+              mean_acc_distance + 
+              acc_ar+
+              acc_slp +
+              mean_bvp + 
+              bvp_ar + 
+              bvp_slp + 
+              mean_acc_x + 
+              acc_x_ar + 
+              acc_x_slp + 
+              mean_acc_y + 
+              acc_y_ar + 
+              acc_y_slp + 
+              mean_acc_z + 
+              acc_z_ar + 
+              acc_z_slp + 
+             (1 |id), 
+          data =window_data_collect[window_data_collect$in_agg_session==1,], 
+          family = "binomial")
+summary(m2)
+```
